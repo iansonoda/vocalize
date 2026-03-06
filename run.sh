@@ -12,6 +12,9 @@ else
     source venv/bin/activate
 fi
 
-echo "🚀 Starting AI Speech Tool..."
-echo "Press F8 to toggle recording. Ctrl+C to exit."
-python3 main.py
+echo "📦 Installing GUI dependencies..."
+cd app && npm install && cd ..
+
+echo "🚀 Starting AI Speech Tool Desktop App..."
+echo "Press Right Option to toggle recording. Quit the app to exit."
+npm start --prefix app

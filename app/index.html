@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>AI Speech Dashboard</title>
+    <link rel="stylesheet" href="output.css">
+</head>
+<body class="p-8 select-none">
+    <div class="container max-auto max-w-[540px] no-drag">
+        <header class="mb-10">
+            <h1 class="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+                AI Speech Tool
+            </h1>
+            <div class="flex items-center gap-2.5 mt-2 text-sm text-muted-foreground">
+                <div id="status-dot" class="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_10px_#22c55e]"></div>
+                <span id="status-text">Ready to listen (Right Option)</span>
+            </div>
+        </header>
+
+        <div id="wave-dashboard" class="h-10 flex items-center justify-center gap-[3px] my-6 opacity-30 transition-opacity duration-300">
+            <!-- Bars -->
+        </div>
+
+        <div class="bg-card border border-border rounded-xl p-6 mb-8 space-y-6">
+            <div class="space-y-3">
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Formatting Mode</span>
+                <div class="flex gap-2">
+                    <button class="flex-1 px-4 py-2 text-sm rounded-lg border border-border bg-white/5 hover:bg-white/10 transition-all active-btn" onclick="setMode('plain')">Plain</button>
+                    <button class="flex-1 px-4 py-2 text-sm rounded-lg border border-border bg-white/5 hover:bg-white/10 transition-all" onclick="setMode('list')">List</button>
+                    <button class="flex-1 px-4 py-2 text-sm rounded-lg border border-border bg-white/5 hover:bg-white/10 transition-all" onclick="setMode('code')">Code</button>
+                </div>
+            </div>
+            <div class="space-y-3">
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Tone</span>
+                <div class="flex gap-2">
+                    <button class="flex-1 px-4 py-2 text-sm rounded-lg border border-border bg-white/5 hover:bg-white/10 transition-all active-btn" onclick="setTone('natural')">Natural</button>
+                    <button class="flex-1 px-4 py-2 text-sm rounded-lg border border-border bg-white/5 hover:bg-white/10 transition-all" onclick="setTone('professional')">Professional</button>
+                    <button class="flex-1 px-4 py-2 text-sm rounded-lg border border-border bg-white/5 hover:bg-white/10 transition-all" onclick="setTone('casual')">Casual</button>
+                </div>
+            </div>
+        </div>
+
+        <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-4 block">Recent Dictations</span>
+        <div id="history" class="space-y-3">
+             <div class="bg-card border border-white/5 rounded-xl p-4 opacity-50">
+                <div class="text-sm leading-relaxed">No dictations yet. Start talking to see them here!</div>
+             </div>
+        </div>
+    </div>
+
+    <style>
+        .active-btn {
+            @apply bg-primary border-primary shadow-[0_0_15px_rgba(59,130,246,0.4)];
+        }
+        .recording-dot {
+            @apply bg-red-500 shadow-[0_0_10px_#ef4444] animate-pulse;
+        }
+        .bar {
+            @apply w-[2px] h-1 bg-primary rounded-[1px] transition-[height] duration-75;
+        }
+    </style>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+        
+        const historyContainer = document.getElementById('history');
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
+        const waveContainer = document.getElementById('wave-dashboard');
+        
+        let settings = { mode: 'plain', tone: 'natural' };
+
+        // Setup wave bars
+        const bars = [];
+        for (let i = 0; i < 40; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'bar';
+            waveContainer.appendChild(bar);
+            bars.push(bar);
+        }
+
+        function setMode(mode) {
+            settings.mode = mode;
+            updateUI('mode', mode);
+            ipcRenderer.send('update-settings', settings);
+        }
+
+        function setTone(tone) {
+            settings.tone = tone;
+            updateUI('tone', tone);
+            ipcRenderer.send('update-settings', settings);
+        }
+
+        function updateUI(type, value) {
+            const groupIdx = type === 'mode' ? 0 : 1;
+            const groups = document.querySelectorAll('.bg-card .space-y-3');
+            const buttons = groups[groupIdx].querySelectorAll('button');
+            buttons.forEach(btn => {
+                const isActive = btn.innerText.toLowerCase() === value;
+                btn.classList.toggle('bg-primary', isActive);
+                btn.classList.toggle('border-primary', isActive);
+                btn.classList.toggle('shadow-[0_0_15px_rgba(59,130,246,0.4)]', isActive);
+                btn.classList.toggle('bg-white/5', !isActive);
+            });
+        }
+
+        ipcRenderer.on('recording-status', (event, rolling) => {
+            statusDot.classList.toggle('recording-dot', rolling);
+            statusDot.classList.toggle('bg-green-500', !rolling);
+            statusDot.classList.toggle('shadow-[0_0_10px_#22c55e]', !rolling);
+            statusText.innerText = rolling ? 'Recording...' : 'Ready to listen (Right Option)';
+            waveContainer.classList.toggle('opacity-100', rolling);
+            waveContainer.classList.toggle('opacity-30', !rolling);
+        });
+
+        ipcRenderer.on('volume', (event, vol) => {
+            bars.forEach((bar, i) => {
+                const factor = 1 - (Math.abs(i - 20) / 20);
+                const h = 4 + (vol * 36 * factor * (0.8 + Math.random() * 0.4));
+                bar.style.height = `${h}px`;
+            });
+        });
+
+        ipcRenderer.on('new-transcription', (event, data) => {
+            if (historyContainer.innerText.includes('No dictations yet')) {
+                historyContainer.innerHTML = '';
+            }
+
+            const item = document.createElement('div');
+            item.className = 'bg-card border border-white/5 rounded-xl p-4 animate-in fade-in slide-in-from-bottom-2 duration-300';
+            item.innerHTML = `
+                <div class="text-sm leading-relaxed mb-2 text-foreground/90">${data.formatted}</div>
+                <div class="flex justify-between text-[11px] text-muted-foreground uppercase tracking-tight">
+                    <span class="font-medium">${data.mode}</span>
+                    <span>Just now</span>
+                </div>
+            `;
+            historyContainer.prepend(item);
+            
+            if (historyContainer.children.length > 10) {
+                historyContainer.removeChild(historyContainer.lastChild);
+            }
+        });
+    </script>
+</body>
+</html>

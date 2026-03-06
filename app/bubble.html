@@ -1,0 +1,150 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>AI Speech Bubble</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background: transparent;
+      }
+
+      #bubble {
+        width: 280px;
+        height: 60px;
+        background: rgba(20, 20, 20, 0.7);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-radius: 30px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        align-items: center;
+        padding: 0 20px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        opacity: 0;
+        transform: translateY(20px) scale(0.9);
+      }
+
+      #bubble.visible {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        background: #ff4b4b;
+        border-radius: 50%;
+        margin-right: 15px;
+        box-shadow: 0 0 10px #ff4b4b;
+        animation: pulse 1.5s infinite;
+      }
+
+      @keyframes pulse {
+        0% {
+          transform: scale(1);
+          opacity: 1;
+        }
+        50% {
+          transform: scale(1.2);
+          opacity: 0.7;
+        }
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+
+      .wave-container {
+        flex-grow: 1;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+      }
+
+      .bar {
+        width: 3px;
+        height: 4px;
+        background: linear-gradient(to top, #6366f1, #a855f7);
+        border-radius: 2px;
+        transition: height 0.1s ease;
+      }
+
+      .processing-text {
+        color: white;
+        font-size: 14px;
+        font-weight: 500;
+        display: none;
+      }
+
+      #bubble.processing .wave-container {
+        display: none;
+      }
+      #bubble.processing .status-dot {
+        display: none;
+      }
+      #bubble.processing .processing-text {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="bubble">
+      <div class="status-dot"></div>
+      <div class="wave-container" id="wave">
+        <!-- Bars will be added by JS -->
+      </div>
+      <div class="processing-text">Processing...</div>
+    </div>
+
+    <script>
+      const { ipcRenderer } = require("electron");
+      const bubble = document.getElementById("bubble");
+      const waveContainer = document.getElementById("wave");
+      const numBars = 30;
+      const bars = [];
+
+      for (let i = 0; i < numBars; i++) {
+        const bar = document.createElement("div");
+        bar.className = "bar";
+        waveContainer.appendChild(bar);
+        bars.push(bar);
+      }
+
+      ipcRenderer.on("recording-status", (event, recording) => {
+        if (recording) {
+          bubble.classList.add("visible");
+          bubble.classList.remove("processing");
+        } else {
+          bubble.classList.add("processing");
+          setTimeout(() => {
+            bubble.classList.remove("visible");
+          }, 1500);
+        }
+      });
+
+      ipcRenderer.on("volume", (event, vol) => {
+        // vol is expected to be 0 to 1
+        bars.forEach((bar, i) => {
+          // Add some randomness and delay for a natural wave look
+          const delay = Math.abs(i - numBars / 2) * 0.05;
+          const factor = 1 - Math.abs(i - numBars / 2) / (numBars / 2);
+          const height = 4 + vol * 36 * factor * (0.8 + Math.random() * 0.4);
+          bar.style.height = `${height}px`;
+        });
+      });
+    </script>
+  </body>
+</html>

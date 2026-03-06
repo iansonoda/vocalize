@@ -4,6 +4,7 @@ import numpy as np
 import tempfile
 import os
 import time
+import sys
 
 class AudioRecorder:
     def __init__(self, sample_rate=44100, channels=1):
@@ -18,6 +19,10 @@ class AudioRecorder:
         if status:
             print(status, file=sys.stderr)
         self.audio_data.append(indata.copy())
+        
+        # Calculate volume for UI
+        volume_norm = np.linalg.norm(indata) * 10 / indata.size
+        print(f"VOL:{min(1.0, volume_norm)}", flush=True)
 
     def start_recording(self):
         """Starts the audio recording."""

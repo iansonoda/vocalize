@@ -8,12 +8,12 @@ HUGGINGFACE_API_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN")
 
 # Initialize the Hugging Face Inference Client
 # Qwen/Qwen2.5-72B-Instruct is excellent for instructions and grammar
-MODEL = "Qwen/Qwen2.5-72B-Instruct"
+MODEL = "Qwen/Qwen2.5-Coder-32B-Instruct" # Better general performance
 
 # If the free tier blocks the 72B model, it will gracefully fallback to returning the raw text
 client = InferenceClient(model=MODEL, token=HUGGINGFACE_API_TOKEN)
 
-def clean_text(raw_text, mode="plain"):
+def clean_text(raw_text, mode="plain", tone="natural"):
     """
     Sends raw transcribed text to Qwen via Hugging Face to fix grammar, remove stutters, and format it.
     Fallback to raw text if the API fails or is loading.
@@ -27,13 +27,14 @@ def clean_text(raw_text, mode="plain"):
         "2. Fix false starts, stutters, and grammatical mistakes.\n"
         "3. Apply proper punctuation and capitalization.\n"
         "4. DO NOT add any conversational responses like 'Here is the fixed text'. Output ONLY the clean text.\n"
-        "5. Keep the original meaning and tone intact.\n"
-        "6. If the user is listing items (e.g. they say 'one item two item' or 'first item second item'), actively format the output as a clean numbered or bulleted list with line breaks.\n"
-        "7. Specifically look for dictation cues like 'next line', 'bullet point', 'number one', 'colon'."
+        "5. Keep the original meaning intact.\n"
+        f"6. Tone: Adjust the tone to be {tone}. (natural/professional/casual).\n"
+        "7. If the user is listing items (e.g. they say 'one item two item' or 'first item second item'), actively format the output as a clean numbered or bulleted list with line breaks.\n"
+        "8. Specifically look for dictation cues like 'next line', 'bullet point', 'number one', 'colon'."
     )
     
     if mode == "list":
-         system_prompt += "\n8. Forcibly format the entire output as a clean markdown bulleted list regardless of the input structure."
+         system_prompt += "\n9. Forcibly format the entire output as a clean markdown bulleted list regardless of the input structure."
          
     messages = [
         {"role": "system", "content": system_prompt},
