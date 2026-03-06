@@ -2,19 +2,24 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>AI Speech Dashboard</title>
+    <title>OpenFlow Dashboard</title>
     <link rel="stylesheet" href="output.css">
 </head>
-<body class="p-8 select-none">
-    <div class="container max-auto max-w-[540px] no-drag">
-        <header class="mb-10">
-            <h1 class="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-                AI Speech Tool
-            </h1>
-            <div class="flex items-center gap-2.5 mt-2 text-sm text-muted-foreground">
-                <div id="status-dot" class="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_10px_#22c55e]"></div>
-                <span id="status-text">Ready to listen (Right Option)</span>
+<body class="p-4 md:p-8 select-none min-h-screen flex flex-col items-center bg-[#0f172a] text-slate-200">
+    <div class="w-full max-w-[540px] no-drag">
+        <header class="mb-10 flex justify-between items-start">
+            <div>
+                <h1 class="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+                    OpenFlow
+                </h1>
+                <div class="flex items-center gap-2.5 mt-2 text-sm text-slate-400">
+                    <div id="status-dot" class="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_10px_#22c55e]"></div>
+                    <span id="status-text">Ready to listen (Right Option)</span>
+                </div>
             </div>
+            <button onclick="quitApp()" class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-white/5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-all border border-white/10 hover:border-red-500/30">
+                Quit App
+            </button>
         </header>
 
         <div id="wave-dashboard" class="h-10 flex items-center justify-center gap-[3px] my-6 opacity-30 transition-opacity duration-300">
@@ -89,6 +94,10 @@
             settings.tone = tone;
             updateUI('tone', tone);
             ipcRenderer.send('update-settings', settings);
+        }
+
+        function quitApp() {
+            ipcRenderer.send('quit-app');
         }
 
         function updateUI(type, value) {

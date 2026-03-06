@@ -14,6 +14,16 @@ from pynput import keyboard
 # F8 is usually a safe choice on a Mac
 TOGGLE_KEY = keyboard.Key.alt_r 
 
+def hide_dock_icon():
+    if sys.platform == "darwin":
+        try:
+            import AppKit
+            # NSApplicationActivationPolicyProhibited = 2
+            # This hides the dock icon for the Python process
+            AppKit.NSApplication.sharedApplication().setActivationPolicy_(2)
+        except Exception as e:
+            print(f"DEBUG: Could not hide dock icon: {e}", flush=True)
+
 class AppController:
     def __init__(self):
         self.recorder = AudioRecorder()
@@ -108,5 +118,6 @@ class AppController:
             listener.join()
 
 if __name__ == "__main__":
+    hide_dock_icon()
     app_controller = AppController()
     app_controller.run()

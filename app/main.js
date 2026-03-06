@@ -1,11 +1,16 @@
-const { app, BrowserWindow, screen, ipcMain, Tray, Menu } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  screen,
+  ipcMain,
+  Menu,
+  nativeImage,
+} = require("electron");
 const path = require("path");
 const { spawn } = require("child_process");
 
 let mainWindow;
-let bubbleWindow;
 let pythonProcess;
-let tray;
 
 function createWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
@@ -14,12 +19,13 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 600,
     height: 700,
+    icon: path.join(__dirname, "openflow_icon.png"),
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
     },
     titleBarStyle: "hiddenInset",
-    show: false,
+    show: false, // Start hidden to prevent flicker
     backgroundColor: "#0f172a",
   });
 
@@ -30,74 +36,52 @@ function createWindow() {
     }
   });
 
-  mainWindow.on('show', () => {
-    if (process.platform === 'darwin') app.dock.show();
+  mainWindow.on("show", () => {
+    if (process.platform === "darwin") {
+      app.dock.show();
+    }
   });
 
-  mainWindow.on('hide', () => {
-    if (process.platform === 'darwin') app.dock.hide();
+  mainWindow.on("hide", () => {
+    // We keep it visible even when hidden to allow reactivating from Dock
+    if (process.platform === "darwin") {
+      app.dock.show();
+    }
   });
 
   mainWindow.loadFile("index.html");
 
-  // Bubble Overlay
-  bubbleWindow = new BrowserWindow({
-    width: 400,
-    height: 100,
-    x: Math.floor((width - 400) / 2),
-    y: height - 120,
-    frame: false,
-    transparent: true,
-    alwaysOnTop: true,
-    resizable: false,
-    movable: false,
-    hasShadow: false,
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-    },
-    show: false,
-  });
-
-  bubbleWindow.on("close", (event) => {
-    if (!app.isQuiting) {
-      event.preventDefault();
-      bubbleWindow.hide();
-    }
-  });
-
-  bubbleWindow.setIgnoreMouseEvents(true);
-  bubbleWindow.loadFile("bubble.html");
-
   mainWindow.once("ready-to-show", () => {
-    // We don't auto-show now, stay in tray
-    console.log("Dashboard ready in background");
+    mainWindow.show();
+    mainWindow.focus();
+    if (process.platform === "darwin") {
+      app.dock.show();
+    }
+    console.log("Dashboard ready and shown");
   });
 }
 
+app.setName("OpenFlow");
+
 app.whenReady().then(() => {
+  if (process.platform === "darwin") {
+    const iconPath = path.join(__dirname, "openflow_icon.png");
+    const appIcon = nativeImage.createFromPath(iconPath);
+    app.dock.setIcon(appIcon);
+    app.dock.show();
+  }
+
   createWindow();
 
-  tray = new Tray(path.join(__dirname, "icon.png"));
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: "Open Dashboard",
-      click: () => {
-        if (!mainWindow.isVisible()) mainWindow.show();
-        mainWindow.focus();
-      },
-    },
-    { type: "separator" },
-    {
-      label: "Quit",
-      click: () => {
-        app.isQuiting = true;
-        app.quit();
-      },
-    },
-  ]);
-  tray.setToolTip("AI Speech Tool");
-  tray.setContextMenu(contextMenu);
+  // When clicking the dock icon, show the dashboard
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    } else if (mainWindow && !mainWindow.isVisible()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
 
   startPython();
 });
@@ -117,29 +101,15 @@ function startPython() {
 
     lines.forEach((line) => {
       if (line.includes("--- 🟢 Recording Started ---")) {
-        if (bubbleWindow && !bubbleWindow.isDestroyed()) {
-          bubbleWindow.show();
-          bubbleWindow.webContents.send("recording-status", true);
-        }
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send("recording-status", true);
         }
       } else if (line.includes("--- 🔴 Recording Stopped ---")) {
-        if (bubbleWindow && !bubbleWindow.isDestroyed()) {
-          bubbleWindow.webContents.send("recording-status", false);
-          setTimeout(() => {
-            if (bubbleWindow && !bubbleWindow.isDestroyed())
-              bubbleWindow.hide();
-          }, 1500);
-        }
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send("recording-status", false);
         }
       } else if (line.startsWith("VOL:")) {
         const vol = parseFloat(line.split(":")[1]);
-        if (bubbleWindow && !bubbleWindow.isDestroyed()) {
-          bubbleWindow.webContents.send("volume", vol);
-        }
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send("volume", vol);
         }
@@ -169,6 +139,11 @@ ipcMain.on("update-settings", (event, settings) => {
   if (pythonProcess) {
     pythonProcess.stdin.write(`SETTINGS:${JSON.stringify(settings)}\n`);
   }
+});
+
+ipcMain.on("quit-app", () => {
+  app.isQuiting = true;
+  app.quit();
 });
 
 app.on("window-all-closed", function () {
