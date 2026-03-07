@@ -11,6 +11,7 @@ const { spawn } = require("child_process");
 
 let mainWindow;
 let pythonProcess;
+let overlayWindow;
 
 function createWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
@@ -51,6 +52,28 @@ function createWindow() {
 
   mainWindow.loadFile("index.html");
 
+  // Unified Small Overlay Window
+  overlayWindow = new BrowserWindow({
+    width: 300,
+    height: 120,
+    x: Math.floor((width - 300) / 2),
+    y: height - 120,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    focusable: false,
+    resizable: false,
+    movable: false,
+    hasShadow: false,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+    },
+    show: true,
+  });
+  overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+  overlayWindow.loadFile("overlay.html");
+
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
     mainWindow.focus();
@@ -72,6 +95,18 @@ app.whenReady().then(() => {
   }
 
   createWindow();
+
+  // Poll mouse position to implement robust hover across transparent window ignoring mouse events
+  setInterval(() => {
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      const point = screen.getCursorScreenPoint();
+      const bounds = overlayWindow.getBounds();
+      overlayWindow.webContents.send("cursor-point", {
+        x: point.x - bounds.x,
+        y: point.y - bounds.y,
+      });
+    }
+  }, 50);
 
   // When clicking the dock icon, show the dashboard
   app.on("activate", () => {
@@ -104,9 +139,21 @@ function startPython() {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send("recording-status", true);
         }
+        if (overlayWindow && !overlayWindow.isDestroyed()) {
+          overlayWindow.webContents.send("status", "recording");
+        }
       } else if (line.includes("--- 🔴 Recording Stopped ---")) {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send("recording-status", false);
+        }
+      } else if (line.startsWith("STATUS: loading")) {
+        if (overlayWindow && !overlayWindow.isDestroyed()) {
+          overlayWindow.webContents.send("status", "loading");
+        }
+      } else if (line.startsWith("BANDS:")) {
+        const bandsData = JSON.parse(line.substring(6));
+        if (overlayWindow && !overlayWindow.isDestroyed()) {
+          overlayWindow.webContents.send("bands", bandsData);
         }
       } else if (line.startsWith("VOL:")) {
         const vol = parseFloat(line.split(":")[1]);
@@ -117,6 +164,9 @@ function startPython() {
         const payload = JSON.parse(line.substring(6));
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send("new-transcription", payload);
+        }
+        if (overlayWindow && !overlayWindow.isDestroyed()) {
+          overlayWindow.webContents.send("status", "idle");
         }
       } else if (line.startsWith("DEBUG:")) {
         console.log("Python Debug:", line);

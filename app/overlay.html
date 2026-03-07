@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="output.css">
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: transparent; 
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            padding-bottom: 5px;
+        }
+        .tooltip {
+            background: #000000;
+            color: #d1d5db;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-family: -apple-system, sans-serif;
+            font-weight: 500;
+            margin-bottom: 8px;
+            opacity: 0;
+            transform: translateY(4px);
+            transition: all 0.2s ease;
+            box-shadow: none;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            line-height: normal;
+        }
+        .tooltip.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .key {
+            color: #ec4899;
+            font-weight: 600;
+        }
+        .pill {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 4px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            box-shadow: none;
+            transition: all 0.2s ease;
+            cursor: default;
+            width: 36px;
+            height: 8px;
+            overflow: hidden;
+        }
+        .hover-area:hover .pill, .hover-area.hovered .pill, .pill.recording, .pill.loading {
+            background: rgba(0, 0, 0, 0.85); /* Slightly less dense than #000, looks elegant */
+            border-radius: 9999px;
+            padding: 6px 10px;
+            width: auto;
+            min-width: 48px;
+            height: 28px;
+            overflow: visible;
+        }
+        .bar {
+            width: 3px;
+            height: 0px;
+            opacity: 0;
+            background: #71717a;
+            border-radius: 2px;
+            transition: height 0.05s ease, background-color 0.2s ease, opacity 0.2s ease;
+        }
+        .hover-area:hover .bar, .hover-area.hovered .bar, .recording .bar, .pill.loading .bar {
+            height: 4px;
+            opacity: 1;
+        }
+        .recording .bar {
+            background: #e4e4e7;
+            box-shadow: none;
+        }
+        .spinner {
+            width: 14px;
+            height: 14px;
+            animation: spin 1s linear infinite;
+            display: none;
+            color: #e4e4e7;
+        }
+        .loading .spinner {
+            display: block;
+        }
+        .loading .wave-container {
+            display: none;
+        }
+        .wave-container {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            height: 16px;
+        }
+        
+        .hover-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: -10px;
+        }
+        
+        .hover-area:hover .tooltip, .hover-area.hovered .tooltip {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="hover-area" id="hover-area">
+        <div class="tooltip" id="tooltip">
+            Click or hold <span class="key">⌥ Opt ➔</span> to start dictating
+        </div>
+        <div class="pill" id="pill">
+            <div class="wave-container" id="wave-container">
+            </div>
+            <svg class="spinner" id="spinner" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+        </div>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+        const waveContainer = document.getElementById('wave-container');
+        const pill = document.getElementById('pill');
+        const tooltip = document.getElementById('tooltip');
+        
+        const numBars = 15;
+        const bars = [];
+        
+        for (let i = 0; i < numBars; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'bar';
+            waveContainer.appendChild(bar);
+            bars.push(bar);
+        }
+
+        // Robust hover detection for macOS Electron forward:true behavior
+        const hoverArea = document.getElementById('hover-area');
+        ipcRenderer.on('cursor-point', (event, pt) => {
+            // Strictly detect if the mouse is directly over the pill element itself
+            const rect = pill.getBoundingClientRect();
+            if (pt.x >= rect.left && pt.x <= rect.right && 
+                pt.y >= rect.top && pt.y <= rect.bottom) {
+                hoverArea.classList.add('hovered');
+            } else {
+                hoverArea.classList.remove('hovered');
+            }
+        });
+        // Fallback standard event listeners too
+        hoverArea.addEventListener('mouseenter', () => hoverArea.classList.add('hovered'));
+        hoverArea.addEventListener('mouseleave', () => hoverArea.classList.remove('hovered'));
+
+        ipcRenderer.on('status', (event, status) => {
+            if (status === 'loading') {
+                pill.classList.add('loading');
+                pill.classList.remove('recording');
+                tooltip.classList.add('visible');
+                tooltip.innerHTML = "Loading response...";
+            } else if (status === 'recording') {
+                pill.classList.remove('loading');
+                pill.classList.add('recording');
+                tooltip.classList.add('visible');
+                tooltip.innerHTML = "Listening...";
+            } else if (status === 'stopped' || status === 'idle') {
+                pill.classList.remove('loading');
+                pill.classList.remove('recording');
+                tooltip.classList.remove('visible');
+                
+                // Delay changing the text so it doesn't flash while fading out
+                setTimeout(() => {
+                    if (!pill.classList.contains('loading') && !pill.classList.contains('recording')) {
+                        tooltip.innerHTML = 'Click or hold <span class="key">⌥ Opt ➔</span> to start dictating';
+                    }
+                }, 200);
+                
+                // Reset bars to empty so CSS controls idle hidden state
+                bars.forEach(bar => {
+                    bar.style.height = ''; 
+                });
+            }
+        });
+
+        ipcRenderer.on('bands', (event, bandData) => {
+            if (!pill.classList.contains('recording')) return;
+            
+            bars.forEach((bar, i) => {
+                const vol = bandData[i] || 0;
+                // Scale from 4px to 16px based on band sensitivity
+                const h = 4 + (vol * 12 * (0.8 + Math.random() * 0.4));
+                bar.style.height = `${Math.min(h, 16)}px`;
+            });
+        });
+    </script>
+</body>
+</html>

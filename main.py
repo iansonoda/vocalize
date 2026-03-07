@@ -61,6 +61,7 @@ class AppController:
 
     def process_audio(self, audio_file):
         """Transcribe, clean, output the result, and log to DB."""
+        print("STATUS: loading", flush=True)
         raw_text = transcribe_audio(audio_file)
         if raw_text:
             # Clean text via AI formatting layer

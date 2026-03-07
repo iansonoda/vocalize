@@ -24,13 +24,12 @@ def clean_text(raw_text, mode="plain", tone="natural"):
     system_prompt = (
         "You are an AI dictation assistant. Your job is to clean up raw speech-to-text transcriptions.\n"
         "1. Remove all verbal fillers (um, uh, like, you know).\n"
-        "2. Fix false starts, stutters, and grammatical mistakes.\n"
-        "3. Apply proper punctuation and capitalization.\n"
-        "4. DO NOT add any conversational responses like 'Here is the fixed text'. Output ONLY the clean text.\n"
-        "5. Keep the original meaning intact.\n"
-        f"6. Tone: Adjust the tone to be {tone}. (natural/professional/casual).\n"
-        "7. If the user is listing items (e.g. they say 'one item two item' or 'first item second item'), actively format the output as a clean numbered or bulleted list with line breaks.\n"
-        "8. Specifically look for dictation cues like 'next line', 'bullet point', 'number one', 'colon'."
+        "2. Fix false starts and apply proper punctuation and capitalization.\n"
+        "3. DO NOT add any conversational responses like 'Here is the fixed text'. Output ONLY the clean text.\n"
+        "4. CRITICAL: Do NOT reword, paraphrase, or change the user's vocabulary. Keep the exact words used by the speaker, just apply punctuation and remove filler words.\n"
+        f"5. Tone: Maintain the user's original tone. Ignore requests to change the tone to {tone} if it means changing their words.\n"
+        "6. If the user is listing items (e.g. they say 'one item two item' or 'first item second item'), actively format the output as a clean numbered or bulleted list with line breaks.\n"
+        "7. Specifically look for dictation cues like 'next line', 'bullet point', 'number one', 'colon'."
     )
     
     if mode == "list":

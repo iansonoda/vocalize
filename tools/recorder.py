@@ -21,7 +21,25 @@ class AudioRecorder:
         self.audio_data.append(indata.copy())
         
         # Calculate volume for UI
-        volume_norm = np.linalg.norm(indata) * 10 / indata.size
+        volume_norm = float(np.max(np.abs(indata)))
+        
+        import json
+        audio_mono = indata[:, 0] if indata.ndim > 1 else indata
+        
+        # Simple high-sensitivity frequency bands using FFT
+        fft_result = np.abs(np.fft.rfft(audio_mono))
+        num_bands = 15
+        bands = []
+        if len(fft_result) >= num_bands:
+            band_size = len(fft_result) // num_bands
+            for i in range(num_bands):
+                # We multiply by 15.0 to increase the sensitivity of the waveform heavily as requested
+                band_val = float(np.mean(fft_result[i*band_size : (i+1)*band_size])) * 15.0
+                bands.append(min(1.0, band_val))
+        else:
+            bands = [volume_norm] * num_bands
+            
+        print(f"BANDS:{json.dumps(bands)}", flush=True)
         print(f"VOL:{min(1.0, volume_norm)}", flush=True)
 
     def start_recording(self):
