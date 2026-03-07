@@ -15,6 +15,6 @@ fi
 echo "📦 Installing GUI dependencies..."
 cd app && npm install && cd ..
 
-echo "🚀 Starting AI Speech Tool Desktop App..."
+echo "🚀 Starting Vocalize AI Desktop App..."
 echo "Press Right Option to toggle recording. Quit the app to exit."
 npm start --prefix app
