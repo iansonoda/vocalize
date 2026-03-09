@@ -18,8 +18,8 @@ function createWindow() {
 
   // Main Dashboard Window
   mainWindow = new BrowserWindow({
-    width: 600,
-    height: 700,
+    width: Math.floor(width * (2 / 3)),
+    height: Math.floor(height * (2 / 3)),
     icon: path.join(__dirname, "openflow_icon.png"),
     webPreferences: {
       nodeIntegration: true,
@@ -92,6 +92,18 @@ app.whenReady().then(() => {
     const appIcon = nativeImage.createFromPath(iconPath);
     app.dock.setIcon(appIcon);
     app.dock.show();
+
+    // Setup dock menu for right-click on taskbar icon
+    const dockMenu = Menu.buildFromTemplate([
+      {
+        label: "Quit",
+        click: () => {
+          app.isQuiting = true;
+          app.quit();
+        },
+      },
+    ]);
+    app.dock.setMenu(dockMenu);
   }
 
   createWindow();
@@ -119,6 +131,10 @@ app.whenReady().then(() => {
   });
 
   startPython();
+});
+
+app.on("before-quit", () => {
+  app.isQuiting = true;
 });
 
 function startPython() {

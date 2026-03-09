@@ -5,6 +5,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "build:css": "tailwindcss -i ./styles.css -o ./output.css",
+    "watch:css": "tailwindcss -i ./styles.css -o ./output.css --watch",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

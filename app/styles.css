@@ -26,12 +26,31 @@
     --radius: 0.75rem;
   }
 }
+@layer components {
+  .bar {
+    @apply w-[3px] h-0 opacity-0 bg-[#71717a] rounded-[2px] transition-all duration-[50ms];
+  }
+  
+  .recording .bar, 
+  .loading .bar,
+  .hovered .bar,
+  .group:hover .bar {
+    @apply h-1 opacity-100;
+  }
+  
+  .recording .bar {
+    @apply bg-[#e4e4e7];
+  }
 
-body {
-  @apply bg-background text-foreground antialiased;
-  -webkit-app-region: drag;
-}
+  .table-row {
+    @apply flex py-4 px-5 border-b border-[#f4f4f4] transition-colors duration-200 last:border-b-0 hover:bg-[#fafafa];
+  }
 
-.no-drag {
-  -webkit-app-region: no-drag;
+  .table-time {
+    @apply w-[140px] shrink-0 text-[#888] text-[13px] font-medium;
+  }
+
+  .table-text {
+    @apply text-[#333] text-sm leading-relaxed;
+  }
 }
