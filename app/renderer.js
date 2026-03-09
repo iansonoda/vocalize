@@ -23,7 +23,7 @@ function formatTime(date) {
   return hours + ":" + minutes + " " + ampm;
 }
 
-ipcRenderer.on("new-transcription", (event, data) => {
+ipcRenderer.on("new-transcription", (data) => {
   if (emptyState) {
     emptyState.style.display = "none";
   }
@@ -47,4 +47,17 @@ ipcRenderer.on("new-transcription", (event, data) => {
   if (historyContainer.children.length > 50) {
     historyContainer.removeChild(historyContainer.lastChild);
   }
+});
+
+// Update Analytics
+ipcRenderer.on("stats-update", (stats) => {
+  const streakEl = document.getElementById("streak-val");
+  const wordsEl = document.getElementById("words-val");
+  const wpmEl = document.getElementById("wpm-val");
+
+  if (streakEl)
+    streakEl.textContent = `${stats.streak} day${stats.streak !== 1 ? "s" : ""}`;
+  if (wordsEl)
+    wordsEl.textContent = `${stats.total_words.toLocaleString()} words overall`;
+  if (wpmEl) wpmEl.textContent = `${stats.wpm} WPM`;
 });

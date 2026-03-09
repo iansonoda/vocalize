@@ -184,6 +184,11 @@ function startPython() {
         if (overlayWindow && !overlayWindow.isDestroyed()) {
           overlayWindow.webContents.send("status", "idle");
         }
+      } else if (line.startsWith("STATS:")) {
+        const stats = JSON.parse(line.substring(6));
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("stats-update", stats);
+        }
       } else if (line.startsWith("DEBUG:")) {
         console.log("Python Debug:", line);
       }

@@ -23,7 +23,9 @@ def test_database():
           created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
           raw_transcription TEXT NOT NULL,
           formatted_transcription TEXT NOT NULL,
-          formatting_mode VARCHAR(50) DEFAULT 'plain'
+          formatting_mode VARCHAR(50) DEFAULT 'plain',
+          duration FLOAT DEFAULT 0,
+          word_count INTEGER DEFAULT 0
         );
         """)
         conn.commit()

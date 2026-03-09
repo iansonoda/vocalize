@@ -2,7 +2,7 @@ from tools.recorder import AudioRecorder
 from tools.transcriber import transcribe_audio
 from tools.cleaner import clean_text
 from tools.paster import paste_text
-from tools.db import save_transcription
+from tools.db import save_transcription, get_stats
 import time
 import os
 
@@ -28,6 +28,7 @@ class AppController:
     def __init__(self):
         self.recorder = AudioRecorder()
         self.settings = {"mode": "plain", "tone": "natural"}
+        self.recording_start_time = 0
         print(f"👂 Listening for {TOGGLE_KEY} press...")
 
     def update_settings(self, settings_json):
@@ -43,15 +44,17 @@ class AppController:
             if not self.recorder.is_recording:
                 # Start recording
                 print("\n--- 🟢 Recording Started ---", flush=True)
+                self.recording_start_time = time.time()
                 self.recorder.start_recording()
             else:
                 # Stop recording
                 print("\n--- 🔴 Recording Stopped ---", flush=True)
+                duration = time.time() - self.recording_start_time
                 audio_file = self.recorder.stop_recording()
                 
                 if audio_file:
                     # Pass the audio to the transcription and then paste it
-                    self.process_audio(audio_file)
+                    self.process_audio(audio_file, duration)
 
     def on_release(self, key):
         # Stop listener if Escape is pressed (optional safety hatch)
@@ -59,7 +62,7 @@ class AppController:
         #     return False
         pass
 
-    def process_audio(self, audio_file):
+    def process_audio(self, audio_file, duration):
         """Transcribe, clean, output the result, and log to DB."""
         print("STATUS: loading", flush=True)
         raw_text = transcribe_audio(audio_file)
@@ -82,18 +85,27 @@ class AppController:
             payload = json.dumps({
                 "raw": raw_text,
                 "formatted": formatted_text,
-                "mode": mode
+                "mode": mode,
+                "duration": duration
             })
             print(f"FINAL:{payload}", flush=True)
             
             # Save the record in the database
-            save_transcription(raw_text, formatted_text, mode=mode)
+            save_transcription(raw_text, formatted_text, mode=mode, duration=duration)
+            
+            # Emit updated stats
+            self.emit_stats()
             
         # Optional: delete temporary audio file after processing to save disk space
         try:
              os.remove(audio_file)
         except Exception:
              pass
+
+    def emit_stats(self):
+        """Fetch stats from DB and print for Electron."""
+        stats = get_stats()
+        print(f"STATS:{json.dumps(stats)}", flush=True)
 
     def run(self):
         # We need to re-import keyboard specifically inside run scope or at module level properly
@@ -108,9 +120,14 @@ class AppController:
                     break
                 if line.startswith("SETTINGS:"):
                     self.update_settings(line[9:].strip())
+                elif line.startswith("GET_STATS"):
+                    self.emit_stats()
         
         t = threading.Thread(target=input_thread, daemon=True)
         t.start()
+        
+        # Initial stats emission
+        self.emit_stats()
 
         # Collect events until interrupted
         with keyboard.Listener(
