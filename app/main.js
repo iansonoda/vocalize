@@ -9,6 +9,11 @@ const {
 const path = require("path");
 const { spawn } = require("child_process");
 
+// Set the app name at the earliest possible stage for macOS branding
+app.name = "Vocalize AI";
+app.setName("Vocalize AI");
+process.title = "Vocalize AI";
+
 let mainWindow;
 let pythonProcess;
 let overlayWindow;
@@ -20,7 +25,8 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: Math.floor(width * (2 / 3)),
     height: Math.floor(height * (2 / 3)),
-    icon: path.join(__dirname, "openflow_icon.png"),
+    title: "Vocalize AI",
+    icon: path.join(__dirname, "vocalize_icon.png"),
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
@@ -56,6 +62,7 @@ function createWindow() {
   overlayWindow = new BrowserWindow({
     width: 300,
     height: 120,
+    title: "Vocalize AI Overlay",
     x: Math.floor((width - 300) / 2),
     y: height - 120,
     frame: false,
@@ -84,14 +91,66 @@ function createWindow() {
   });
 }
 
-app.setName("Vocalize AI");
-
 app.whenReady().then(() => {
+  app.name = "Vocalize AI";
+
   if (process.platform === "darwin") {
-    const iconPath = path.join(__dirname, "openflow_icon.png");
+    app.setAboutPanelOptions({
+      applicationName: "Vocalize AI",
+      applicationVersion: "1.0.0",
+    });
+
+    const iconPath = path.join(__dirname, "vocalize_icon.png");
     const appIcon = nativeImage.createFromPath(iconPath);
     app.dock.setIcon(appIcon);
     app.dock.show();
+
+    // Setup the app menu to replace "Electron" in the top left
+    const menuTemplate = [
+      {
+        label: app.name,
+        submenu: [
+          { role: "about" },
+          { type: "separator" },
+          { role: "services" },
+          { type: "separator" },
+          { role: "hide" },
+          { role: "hideOthers" },
+          { role: "unhide" },
+          { type: "separator" },
+          {
+            label: "Quit",
+            accelerator: "Command+Q",
+            click: () => {
+              app.isQuiting = true;
+              app.quit();
+            },
+          },
+        ],
+      },
+      {
+        label: "Edit",
+        submenu: [
+          { role: "undo" },
+          { role: "redo" },
+          { type: "separator" },
+          { role: "cut" },
+          { role: "copy" },
+          { role: "paste" },
+          { role: "selectAll" },
+        ],
+      },
+      {
+        label: "View",
+        submenu: [{ role: "reload" }, { role: "toggleDevTools" }],
+      },
+      {
+        label: "Window",
+        submenu: [{ role: "minimize" }, { role: "zoom" }, { role: "close" }],
+      },
+    ];
+    const appMenu = Menu.buildFromTemplate(menuTemplate);
+    Menu.setApplicationMenu(appMenu);
 
     // Setup dock menu for right-click on taskbar icon
     const dockMenu = Menu.buildFromTemplate([

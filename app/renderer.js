@@ -23,7 +23,7 @@ function formatTime(date) {
   return hours + ":" + minutes + " " + ampm;
 }
 
-ipcRenderer.on("new-transcription", (data) => {
+ipcRenderer.on("new-transcription", (event, data) => {
   if (emptyState) {
     emptyState.style.display = "none";
   }
@@ -50,7 +50,7 @@ ipcRenderer.on("new-transcription", (data) => {
 });
 
 // Update Analytics
-ipcRenderer.on("stats-update", (stats) => {
+ipcRenderer.on("stats-update", (event, stats) => {
   const streakEl = document.getElementById("streak-val");
   const wordsEl = document.getElementById("words-val");
   const wpmEl = document.getElementById("wpm-val");
