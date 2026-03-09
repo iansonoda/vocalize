@@ -1,65 +1,125 @@
-# AI Speech Tool
+# <img src="app/vocalize_icon.png" width="40" height="40" valign="middle"> Vocalize AI
 
-A premium, open-source AI dictation tool that transcribes, cleans, and formats your speech in real-time. Built as a Wispr Flow clone utilizing open-source models on Hugging Face.
+[![Maintainability](https://img.shields.io/badge/maintainability-A-brightgreen)](https://github.com/iansonoda/vocalize-ai)
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
+[![Electron](https://img.shields.io/badge/framework-Electron-blueviolet)](https://www.electronjs.org/)
+[![Python](https://img.shields.io/badge/language-Python_3.10+-blue)](https://www.python.org/)
 
-## 🚀 Features
+**Vocalize AI** is a premium, open-source AI dictation & transcription tool designed to streamline your workflow. It captures your speech, cleans it using state-of-the-art AI models, and inserts it directly into any active application—all with a single hotkey.
 
-- **Global Hotkey (<kbd>F8</kbd>)**: Trigger recording system-wide.
-- **Whisper Transcription**: High-accuracy speech-to-text via OpenAI Whisper-large-v3.
-- **Smart AI Cleaner**: Automatically removes "ums", "uhs", and stutters using Qwen-2.5-72B.
-- **Intelligent Formatting**: Smartly detects lists, bullets, and punctuation cues.
-- **Direct Insertion**: Injects text directly into whatever application you are currently using.
-- **Database Logging**: Keeps a history of all transcriptions in Supabase.
+---
 
-## 🛠️ Setup
+## ✨ Features
+
+- **🚀 Global Hotkey (`Right Option`)**: Trigger recording from anywhere in macOS.
+- **🎙️ Precision Transcription**: Powered by **OpenAI Whisper-large-v3** via Hugging Face.
+- **🧹 Intelligent AI Cleaner**: Automatically removes "ums", "uhs", and stutters while preserving your original intent.
+- **📝 Context-Aware Formatting**: Detects lists, bullet points, and punctuation cues like "new line" or "colon".
+- **⚡ Direct Insertion**: Instantly pastes cleaned text into your active text field (Word, Slack, Browser, etc.).
+- **📊 Transcription History**: Local dashboard to view, copy, and manage your past dictations.
+- **🔴 Dynamic Overlay**: A minimalist recording orb that provides real-time visual feedback and audio waveforms.
+
+---
+
+## 🛠️ Technology Stack
+
+| Layer             | Technology             | Service                   |
+| :---------------- | :--------------------- | :------------------------ |
+| **Frontend**      | Electron & TailwindCSS | Native Desktop Experience |
+| **Logic**         | Python 3.10+           | Audio Processing & IPC    |
+| **Transcription** | Whisper Large v3       | Hugging Face Inference    |
+| **NLP Cleanup**   | Qwen 2.5 Coder 32B     | Hugging Face Inference    |
+| **Database**      | PostgreSQL             | Supabase                  |
+
+---
+
+## � Getting Started
 
 ### 1. Prerequisites
 
-- Python 3.10+
-- A Hugging Face account (for API Token)
-- A Supabase account (for PostgreSQL database)
+- **macOS** (Built specifically for the Mac ecosystem).
+- **Python 3.10+** and **Node.js**.
+- A **Hugging Face API Token** (available [here](https://huggingface.co/settings/tokens)).
+- A **Supabase Project** for data persistence.
 
-### 2. Installation
+### 2. Installation & Setup
+
+The easiest way to get started is using the provided run script:
 
 ```bash
-# Clone the repository and navigate to the folder
-# Install virtual environment and dependencies
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+# Clone the repository
+git clone https://github.com/iansonoda/vocalize-ai.git
+cd vocalize-ai
+
+# Configure your environment
+cp .env.template .env
+# Edit .env with your HUGGINGFACE_API_TOKEN and DATABASE_URL
 ```
 
-### 3. Configuration
+### 3. Launching the App
 
-1. Create a `.env` file from the `.env.template`.
-2. Enter your `HUGGINGFACE_API_TOKEN`.
-3. Enter your Supabase `DATABASE_URL`.
-
-### 4. Permissions (macOS)
-
-The first time you run the tool, macOS will ask for permissions.
-
-- **Accessibility**: Required to simulate <kbd>Cmd</kbd>+<kbd>V</kbd> for pasting.
-- **Input Monitoring**: Required for the global <kbd>F8</kbd> hotkey.
-- **Microphone**: Required to record your voice.
-
-## 🕹️ Usage
-
-Run the tool:
+Simply run the launch script. It will automatically handle virtual environment creation, dependency installation, and start the application.
 
 ```bash
+chmod +x run.sh
 ./run.sh
 ```
 
-- **Press <kbd>F8</kbd>**: Start recording.
-- **Speak**: Dictate your thoughts (you can say "one", "two", "bullet point").
-- **Press <kbd>F8</kbd>**: Stop and automatically paste the cleaned text.
+---
 
-## 🧪 Testing
+## 🕹️ Usage
 
-Run the vigorous test suite to ensure everything is connected:
+1. **Start the App**: The dashboard will open, and a recording orb will appear at the bottom of your screen.
+2. **Global Recording**: Press the **`Right Option`** key to start recording.
+3. **Speak Naturally**: Dictate your thoughts. You can use cues like _"bullet point"_ or _"next line"_.
+4. **Finish**: Press **`Right Option`** again. The tool will transcribe, clean, and paste the text into your active window.
 
-```bash
-source venv/bin/activate
-python3 tests/comprehensive_test.py
+> [!TIP]
+> You can switch between **Plain** and **List** modes in the Dashboard to force specific formatting styles.
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+graph TD
+    A[Electron Frontend] <-->|IPC| B[Python Controller]
+    B -->|PyAudio| C[Microphone Input]
+    B -->|Requests| D[Whisper Transcription]
+    D -->|Raw Text| E[Qwen NLP Cleaner]
+    E -->|Clean Text| F[Global Paste Script]
+    F -->|System Event| G[Active Application]
+    B -->|Storage| H[Supabase Database]
 ```
+
+---
+
+## 🛡️ Permissions (macOS)
+
+To function correctly, Vocalize AI requires:
+
+- **Accessibility**: To simulate `Cmd+V` for pasting text.
+- **Input Monitoring**: To detect the global `Right Option` hotkey.
+- **Microphone**: To capture your voice.
+
+---
+
+## 🤝 Contributing
+
+Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+---
+
+## 📜 License
+
+Distributed under the **ISC License**. See `LICENSE` for more information.
+
+---
+
+<p align="center">Built with 💙 by the Vocalize AI Team</p>
