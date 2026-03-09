@@ -31,7 +31,12 @@ ENV/
 # Temporary Files and Artifacts
 .tmp/
 *.wav
+*.mp3
+*.m4a
+*.flac
 dummy.wav
+logs/
+*.log
 
 # macOS
 .DS_Store
@@ -55,3 +60,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .eslintcache
+dist/
+release/
+*.dmg
+*.zip
+*.pkg
