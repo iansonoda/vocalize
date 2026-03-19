@@ -79,6 +79,26 @@ chmod +x run.sh
 
 ---
 
+## 📸 Screenshots
+
+### Dashboard
+
+The main dashboard gives you access to history, formatting modes, and the app controls.
+
+<img src="assets/readme-dashboard.png" alt="Vocalize AI dashboard" width="900" />
+
+### Recording States
+
+The overlay stays visible while dictating, reacts to hover, and shows loading feedback while the transcript is being processed.
+
+<p align="center">
+  <img src="assets/readme-dictating.png" alt="Recording overlay while dictating" width="30%" />
+  <img src="assets/readme-hover%20.png" alt="Recording overlay hover state" width="30%" />
+  <img src="assets/readme-loading.png" alt="Recording overlay loading state" width="30%" />
+</p>
+
+---
+
 ## 🏗️ Architecture
 
 ```mermaid
