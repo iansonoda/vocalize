@@ -54,7 +54,7 @@ class AudioRecorder:
         self.stream.start()
         print("🎙️ Recording started...")
 
-    def stop_recording(self):
+    def stop_recording(self, telemetry=None):
         """Stops the recording and saves to a temporary WAV file."""
         if not self.is_recording:
             return None
@@ -83,6 +83,12 @@ class AudioRecorder:
         
         # Save array to WAV
         sf.write(temp_file, recording, self.sample_rate)
+        if telemetry:
+            telemetry.mark(
+                "temp_file_write_complete",
+                audio_file=os.path.basename(temp_file),
+                audio_size_bytes=os.path.getsize(temp_file),
+            )
         print(f"💾 Saved recording to {temp_file}")
         
         return temp_file

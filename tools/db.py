@@ -6,12 +6,17 @@ load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-def save_transcription(raw_text, formatted_text, mode="plain", duration=0):
+def save_transcription(raw_text, formatted_text, mode="plain", duration=0, telemetry=None):
     """
     Saves the transcription log into the Supabase PostgreSQL database.
     Now includes duration and word_count for analytics.
     """
+    if telemetry:
+        telemetry.mark("database_save_start", mode=mode, duration_seconds=duration)
+
     if not DATABASE_URL:
+        if telemetry:
+            telemetry.mark("database_save_end", status="skipped_no_database_url")
         return
         
     try:
@@ -31,9 +36,13 @@ def save_transcription(raw_text, formatted_text, mode="plain", duration=0):
         
         cur.close()
         conn.close()
+        if telemetry:
+            telemetry.mark("database_save_end", status="success", word_count=word_count)
         print("💽 Saved run to database log.")
         
     except Exception as e:
+        if telemetry:
+            telemetry.mark("database_save_end", status="exception", error=str(e))
         print(f"❌ Failed to save to database: {e}")
 
 def get_stats():

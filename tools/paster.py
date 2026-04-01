@@ -3,19 +3,24 @@ import pyautogui
 import time
 import sys
 
-def paste_text(text):
+def paste_text(text, telemetry=None):
     """
     Copies the text to the clipboard and simulates Cmd+V to paste it into the active window.
     """
     if not text:
         print("⚠️ No text to paste.")
-        return
+        if telemetry:
+            telemetry.mark("insertion_result", status="no_text")
+        return False
 
     print(f"📋 Copying to clipboard: '{text}'")
     # Save the original clipboard content so we don't destroy what the user had there
     original_clipboard = pyperclip.paste()
     
     try:
+        if telemetry:
+            telemetry.mark("insertion_attempt_start", text_chars=len(text))
+
         # Copy our new text
         pyperclip.copy(text)
         
@@ -25,9 +30,15 @@ def paste_text(text):
         # Simulate Cmd+V (macOS paste)
         print("⌨️ Simulating Cmd+V...")
         pyautogui.hotkey('command', 'v')
+        if telemetry:
+            telemetry.mark("insertion_result", status="success")
+        return True
         
     except Exception as e:
+        if telemetry:
+            telemetry.mark("insertion_result", status="exception", error=str(e))
         print(f"❌ Failed to paste text: {e}")
+        return False
     finally:
         # Note: Depending on how fast the target app processes the paste event, 
         # restoring the clipboard too quickly might paste the old text.

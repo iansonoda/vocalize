@@ -65,3 +65,6 @@ release/
 *.dmg
 *.zip
 *.pkg
+CODEX.md
+.gitignore
+PLAN.md

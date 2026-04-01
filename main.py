@@ -3,6 +3,7 @@ from tools.transcriber import transcribe_audio
 from tools.cleaner import clean_text
 from tools.paster import paste_text
 from tools.db import save_transcription, get_stats
+from tools.telemetry import SessionTelemetry
 import time
 import os
 
@@ -29,6 +30,7 @@ class AppController:
         self.recorder = AudioRecorder()
         self.settings = {"mode": "plain", "tone": "natural"}
         self.recording_start_time = 0
+        self.current_session = None
         print(f"👂 Listening for {TOGGLE_KEY} press...")
 
     def update_settings(self, settings_json):
@@ -43,6 +45,13 @@ class AppController:
         if key == TOGGLE_KEY:
             if not self.recorder.is_recording:
                 # Start recording
+                self.current_session = SessionTelemetry()
+                self.current_session.mark(
+                    "record_start",
+                    mode=self.settings.get("mode", "plain"),
+                    tone=self.settings.get("tone", "natural"),
+                    trigger_key=str(TOGGLE_KEY),
+                )
                 print("\n--- 🟢 Recording Started ---", flush=True)
                 self.recording_start_time = time.time()
                 self.recorder.start_recording()
@@ -50,11 +59,20 @@ class AppController:
                 # Stop recording
                 print("\n--- 🔴 Recording Stopped ---", flush=True)
                 duration = time.time() - self.recording_start_time
-                audio_file = self.recorder.stop_recording()
+                if self.current_session:
+                    self.current_session.mark(
+                        "record_stop",
+                        duration_ms=round(duration * 1000, 2),
+                    )
+                audio_file = self.recorder.stop_recording(telemetry=self.current_session)
                 
                 if audio_file:
                     # Pass the audio to the transcription and then paste it
-                    self.process_audio(audio_file, duration)
+                    self.process_audio(audio_file, duration, session=self.current_session)
+                elif self.current_session:
+                    self.current_session.mark("session_aborted", reason="no_audio_file")
+                    self.current_session.emit_summary(outcome="no_audio_file")
+                    self.current_session = None
 
     def on_release(self, key):
         # Stop listener if Escape is pressed (optional safety hatch)
@@ -62,49 +80,74 @@ class AppController:
         #     return False
         pass
 
-    def process_audio(self, audio_file, duration):
+    def process_audio(self, audio_file, duration, session=None):
         """Transcribe, clean, output the result, and log to DB."""
+        telemetry = session or SessionTelemetry()
         print("STATUS: loading", flush=True)
-        raw_text = transcribe_audio(audio_file)
-        if raw_text:
-            # Clean text via AI formatting layer
-            mode = self.settings.get("mode", "plain")
-            tone = self.settings.get("tone", "natural")
-            
-            # Combine tone into cleaner logic if needed, or just pass it
-            formatted_text = clean_text(raw_text, mode=mode, tone=tone)
-            
-            # Fallback if cleaner failed or returned empty
-            if not formatted_text:
-                formatted_text = raw_text
 
-            # Paste into active window
-            paste_text(formatted_text + " ")
-            
-            # Emit for Electron
-            payload = json.dumps({
-                "raw": raw_text,
-                "formatted": formatted_text,
-                "mode": mode,
-                "duration": duration
-            })
-            print(f"FINAL:{payload}", flush=True)
-            
-            # Save the record in the database
-            save_transcription(raw_text, formatted_text, mode=mode, duration=duration)
-            
-            # Emit updated stats
-            self.emit_stats()
-            
-        # Optional: delete temporary audio file after processing to save disk space
         try:
-             os.remove(audio_file)
-        except Exception:
-             pass
+            raw_text = transcribe_audio(audio_file, telemetry=telemetry)
+            if raw_text:
+                # Clean text via AI formatting layer
+                mode = self.settings.get("mode", "plain")
+                tone = self.settings.get("tone", "natural")
+                
+                # Combine tone into cleaner logic if needed, or just pass it
+                formatted_text = clean_text(raw_text, mode=mode, tone=tone, telemetry=telemetry)
+                
+                # Fallback if cleaner failed or returned empty
+                if not formatted_text:
+                    telemetry.mark("cleanup_fallback", reason="empty_cleaned_text")
+                    formatted_text = raw_text
 
-    def emit_stats(self):
+                # Paste into active window
+                paste_success = paste_text(formatted_text + " ", telemetry=telemetry)
+                
+                # Emit for Electron
+                payload = json.dumps({
+                    "raw": raw_text,
+                    "formatted": formatted_text,
+                    "mode": mode,
+                    "duration": duration,
+                    "session_id": telemetry.session_id,
+                })
+                print(f"FINAL:{payload}", flush=True)
+                telemetry.mark("final_event_emitted", event_name="FINAL")
+                
+                # Save the record in the database
+                save_transcription(
+                    raw_text,
+                    formatted_text,
+                    mode=mode,
+                    duration=duration,
+                    telemetry=telemetry,
+                )
+                
+                # Emit updated stats
+                self.emit_stats(session_id=telemetry.session_id)
+                telemetry.emit_summary(
+                    outcome="success",
+                    insertion_success=paste_success,
+                    raw_chars=len(raw_text),
+                    formatted_chars=len(formatted_text),
+                )
+            else:
+                telemetry.mark("session_aborted", reason="empty_transcription")
+                telemetry.emit_summary(outcome="empty_transcription")
+        finally:
+            self.current_session = None
+
+            # Optional: delete temporary audio file after processing to save disk space
+            try:
+                os.remove(audio_file)
+            except Exception:
+                pass
+
+    def emit_stats(self, session_id=None):
         """Fetch stats from DB and print for Electron."""
         stats = get_stats()
+        if session_id:
+            stats["session_id"] = session_id
         print(f"STATS:{json.dumps(stats)}", flush=True)
 
     def run(self):

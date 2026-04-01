@@ -7,6 +7,7 @@ const {
   nativeImage,
 } = require("electron");
 const path = require("path");
+const fs = require("fs");
 const { spawn } = require("child_process");
 
 // Set the app name at the earliest possible stage for macOS branding
@@ -17,6 +18,176 @@ process.title = "Vocalize AI";
 let mainWindow;
 let pythonProcess;
 let overlayWindow;
+let pythonStdoutBuffer = "";
+
+const electronTelemetryPath = path.join(
+  __dirname,
+  "..",
+  ".tmp",
+  "electron_telemetry.jsonl",
+);
+const timingStateBySession = new Map();
+
+function appendJsonLine(filePath, payload) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.appendFileSync(filePath, `${JSON.stringify(payload)}\n`, "utf8");
+}
+
+function rememberPythonTiming(payload) {
+  if (!payload || !payload.session_id || !payload.event) {
+    return;
+  }
+
+  const state = timingStateBySession.get(payload.session_id) || { events: {} };
+  state.events[payload.event] = payload.unix_ms;
+  timingStateBySession.set(payload.session_id, state);
+}
+
+function recordElectronTiming(eventName, details = {}) {
+  const payload = {
+    type: "electron_timing_event",
+    source: "electron",
+    event: eventName,
+    timestamp: new Date().toISOString(),
+    unix_ms: Date.now(),
+    ...details,
+  };
+
+  if (payload.session_id) {
+    const state = timingStateBySession.get(payload.session_id) || { events: {} };
+    state.events[eventName] = payload.unix_ms;
+    timingStateBySession.set(payload.session_id, state);
+
+    const recordStartMs = state.events.record_start;
+    if (typeof recordStartMs === "number") {
+      payload.elapsed_since_record_start_ms = payload.unix_ms - recordStartMs;
+    }
+  }
+
+  appendJsonLine(electronTelemetryPath, payload);
+  return payload;
+}
+
+function finalizeElectronSession(sessionId) {
+  if (!sessionId) {
+    return;
+  }
+
+  const state = timingStateBySession.get(sessionId);
+  if (!state) {
+    return;
+  }
+
+  const recordStartMs = state.events.record_start;
+  const finalReceiptMs = state.events.electron_final_received;
+  const statsReceiptMs = state.events.electron_stats_received;
+  const metrics = {};
+
+  if (
+    typeof recordStartMs === "number" &&
+    typeof finalReceiptMs === "number" &&
+    finalReceiptMs >= recordStartMs
+  ) {
+    metrics.end_to_end_to_final_ui_ms = finalReceiptMs - recordStartMs;
+  }
+
+  if (
+    typeof recordStartMs === "number" &&
+    typeof statsReceiptMs === "number" &&
+    statsReceiptMs >= recordStartMs
+  ) {
+    metrics.end_to_end_to_stats_ui_ms = statsReceiptMs - recordStartMs;
+  }
+
+  if (Object.keys(metrics).length > 0) {
+    appendJsonLine(electronTelemetryPath, {
+      type: "electron_benchmark_summary",
+      source: "electron",
+      session_id: sessionId,
+      timestamp: new Date().toISOString(),
+      unix_ms: Date.now(),
+      metrics,
+    });
+  }
+
+  timingStateBySession.delete(sessionId);
+}
+
+function parseJsonLine(line, prefixLength) {
+  try {
+    return JSON.parse(line.substring(prefixLength));
+  } catch (error) {
+    console.error("Failed to parse JSON line:", line, error);
+    return null;
+  }
+}
+
+function handlePythonLine(line) {
+  if (!line) {
+    return;
+  }
+
+  if (line.includes("--- 🟢 Recording Started ---")) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("recording-status", true);
+    }
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      overlayWindow.webContents.send("status", "recording");
+    }
+  } else if (line.includes("--- 🔴 Recording Stopped ---")) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("recording-status", false);
+    }
+  } else if (line.startsWith("STATUS: loading")) {
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      overlayWindow.webContents.send("status", "loading");
+    }
+  } else if (line.startsWith("BANDS:")) {
+    const bandsData = parseJsonLine(line, 6);
+    if (bandsData && overlayWindow && !overlayWindow.isDestroyed()) {
+      overlayWindow.webContents.send("bands", bandsData);
+    }
+  } else if (line.startsWith("VOL:")) {
+    const vol = parseFloat(line.split(":")[1]);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("volume", vol);
+    }
+  } else if (line.startsWith("TIMING:")) {
+    const timingEvent = parseJsonLine(line, 7);
+    if (timingEvent) {
+      rememberPythonTiming(timingEvent);
+    }
+  } else if (line.startsWith("FINAL:")) {
+    const payload = parseJsonLine(line, 6);
+    if (!payload) {
+      return;
+    }
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("new-transcription", payload);
+    }
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      overlayWindow.webContents.send("status", "idle");
+    }
+    recordElectronTiming("electron_final_received", {
+      session_id: payload.session_id,
+      formatted_chars: payload.formatted ? payload.formatted.length : 0,
+    });
+  } else if (line.startsWith("STATS:")) {
+    const stats = parseJsonLine(line, 6);
+    if (!stats) {
+      return;
+    }
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("stats-update", stats);
+    }
+    recordElectronTiming("electron_stats_received", {
+      session_id: stats.session_id,
+    });
+    finalizeElectronSession(stats.session_id);
+  } else if (line.startsWith("DEBUG:")) {
+    console.log("Python Debug:", line);
+  }
+}
 
 function createWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
@@ -206,51 +377,12 @@ function startPython() {
   });
 
   pythonProcess.stdout.on("data", (data) => {
-    const rawOutput = data.toString();
-    const lines = rawOutput.split("\n");
+    pythonStdoutBuffer += data.toString();
+    const lines = pythonStdoutBuffer.split("\n");
+    pythonStdoutBuffer = lines.pop();
 
     lines.forEach((line) => {
-      if (line.includes("--- 🟢 Recording Started ---")) {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("recording-status", true);
-        }
-        if (overlayWindow && !overlayWindow.isDestroyed()) {
-          overlayWindow.webContents.send("status", "recording");
-        }
-      } else if (line.includes("--- 🔴 Recording Stopped ---")) {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("recording-status", false);
-        }
-      } else if (line.startsWith("STATUS: loading")) {
-        if (overlayWindow && !overlayWindow.isDestroyed()) {
-          overlayWindow.webContents.send("status", "loading");
-        }
-      } else if (line.startsWith("BANDS:")) {
-        const bandsData = JSON.parse(line.substring(6));
-        if (overlayWindow && !overlayWindow.isDestroyed()) {
-          overlayWindow.webContents.send("bands", bandsData);
-        }
-      } else if (line.startsWith("VOL:")) {
-        const vol = parseFloat(line.split(":")[1]);
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("volume", vol);
-        }
-      } else if (line.startsWith("FINAL:")) {
-        const payload = JSON.parse(line.substring(6));
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("new-transcription", payload);
-        }
-        if (overlayWindow && !overlayWindow.isDestroyed()) {
-          overlayWindow.webContents.send("status", "idle");
-        }
-      } else if (line.startsWith("STATS:")) {
-        const stats = JSON.parse(line.substring(6));
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("stats-update", stats);
-        }
-      } else if (line.startsWith("DEBUG:")) {
-        console.log("Python Debug:", line);
-      }
+      handlePythonLine(line.trim());
     });
   });
 
