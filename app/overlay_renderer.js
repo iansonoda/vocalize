@@ -2,6 +2,7 @@ const { ipcRenderer } = require("electron");
 const waveContainer = document.getElementById("wave-container");
 const pill = document.getElementById("pill");
 const tooltip = document.getElementById("tooltip");
+let latestTranscriptText = "";
 
 const numBars = 15;
 const bars = [];
@@ -42,16 +43,17 @@ ipcRenderer.on("status", (event, status) => {
     pill.classList.add("loading");
     pill.classList.remove("recording");
     tooltip.classList.add("visible");
-    tooltip.innerHTML = "Loading response...";
+    tooltip.textContent = latestTranscriptText || "Loading response...";
   } else if (status === "recording") {
     pill.classList.remove("loading");
     pill.classList.add("recording");
     tooltip.classList.add("visible");
-    tooltip.innerHTML = "Listening...";
+    tooltip.textContent = latestTranscriptText || "Listening...";
   } else if (status === "stopped" || status === "idle") {
     pill.classList.remove("loading");
     pill.classList.remove("recording");
     tooltip.classList.remove("visible");
+    latestTranscriptText = "";
 
     // Delay changing the text so it doesn't flash while fading out
     setTimeout(() => {
@@ -68,6 +70,22 @@ ipcRenderer.on("status", (event, status) => {
     bars.forEach((bar) => {
       bar.style.height = "";
     });
+  }
+});
+
+ipcRenderer.on("transcript-event", (event, payload) => {
+  if (payload.event === "partial" || payload.event === "final") {
+    latestTranscriptText = payload.text || "";
+    if (pill.classList.contains("recording") || pill.classList.contains("loading")) {
+      tooltip.classList.add("visible");
+      tooltip.textContent = latestTranscriptText || "Listening...";
+    }
+  } else if (payload.event === "error") {
+    latestTranscriptText = payload.message || "Transcription issue";
+    tooltip.classList.add("visible");
+    tooltip.textContent = latestTranscriptText;
+  } else if (payload.event === "session-complete") {
+    latestTranscriptText = "";
   }
 });
 

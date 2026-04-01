@@ -80,6 +80,14 @@
                     <h3 class="text-[11px] font-bold text-stone-400 uppercase tracking-[0.1em]">Recently Dictated</h3>
                 </div>
 
+                <div id="live-preview" class="hidden mb-4 rounded-2xl border border-[#fed7aa] bg-[#fff7ed] px-5 py-4">
+                    <div class="flex items-center justify-between gap-4 mb-2">
+                        <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-[#c2410c]">Live Transcript</div>
+                        <div id="live-preview-status" class="text-[11px] font-semibold text-[#9a3412]">Idle</div>
+                    </div>
+                    <div id="live-preview-text" class="text-sm leading-relaxed text-[#7c2d12]"></div>
+                </div>
+
                 <div class="border border-[#f0f0f0] rounded-2xl overflow-hidden" id="history">
                     <div id="empty-state" class="p-8 text-center text-stone-500 text-sm bg-stone-50/50">
                         No dictations yet today. Click or hold <strong class="text-orange-500">⌥ Opt ➔</strong> to start dictating!

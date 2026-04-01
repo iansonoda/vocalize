@@ -11,6 +11,7 @@ DEFAULT_ELECTRON_LOG = Path(".tmp/electron_telemetry.jsonl")
 
 PYTHON_METRICS = [
     "recording_duration_ms",
+    "first_partial_latency_ms",
     "temp_file_write_ms",
     "transcription_roundtrip_ms",
     "cleanup_roundtrip_ms",
@@ -20,6 +21,7 @@ PYTHON_METRICS = [
 ]
 
 ELECTRON_METRICS = [
+    "first_partial_ui_ms",
     "end_to_end_to_final_ui_ms",
     "end_to_end_to_stats_ui_ms",
 ]
@@ -107,6 +109,7 @@ def print_latest_sessions(session_rows, latest_count):
         print(
             f"- {short_id} outcome={outcome} "
             f"record={ms_to_seconds(metrics.get('recording_duration_ms'))} "
+            f"first_partial={ms_to_seconds(metrics.get('first_partial_latency_ms'))} "
             f"transcribe={ms_to_seconds(metrics.get('transcription_roundtrip_ms'))} "
             f"cleanup={ms_to_seconds(metrics.get('cleanup_roundtrip_ms'))} "
             f"insert={ms_to_seconds(metrics.get('insertion_latency_ms'))} "

@@ -5,6 +5,7 @@ import tempfile
 import os
 import time
 import sys
+import threading
 
 class AudioRecorder:
     def __init__(self, sample_rate=44100, channels=1):
@@ -13,12 +14,14 @@ class AudioRecorder:
         self.is_recording = False
         self.audio_data = []
         self.stream = None
+        self.audio_lock = threading.Lock()
 
     def _audio_callback(self, indata, frames, time, status):
         """This is called (from a separate thread) for each audio block."""
         if status:
             print(status, file=sys.stderr)
-        self.audio_data.append(indata.copy())
+        with self.audio_lock:
+            self.audio_data.append(indata.copy())
         
         # Calculate volume for UI
         volume_norm = float(np.max(np.abs(indata)))
@@ -45,7 +48,8 @@ class AudioRecorder:
     def start_recording(self):
         """Starts the audio recording."""
         self.is_recording = True
-        self.audio_data = []
+        with self.audio_lock:
+            self.audio_data = []
         self.stream = sd.InputStream(
             samplerate=self.sample_rate,
             channels=self.channels,
@@ -53,6 +57,38 @@ class AudioRecorder:
         )
         self.stream.start()
         print("🎙️ Recording started...")
+
+    def get_audio_snapshot(self):
+        with self.audio_lock:
+            if not self.audio_data:
+                return None, 0.0
+            blocks = [block.copy() for block in self.audio_data]
+
+        recording = np.concatenate(blocks, axis=0)
+        duration_seconds = recording.shape[0] / float(self.sample_rate)
+        return recording, duration_seconds
+
+    def get_recording_duration_seconds(self):
+        _, duration_seconds = self.get_audio_snapshot()
+        return duration_seconds
+
+    def write_snapshot_file(self, prefix="recording", session_id=None):
+        recording, duration_seconds = self.get_audio_snapshot()
+        if recording is None:
+            return None, 0.0
+
+        tmp_dir = os.path.join(os.getcwd(), ".tmp")
+        os.makedirs(tmp_dir, exist_ok=True)
+        if session_id:
+            tmp_dir = os.path.join(tmp_dir, "partials", session_id)
+            os.makedirs(tmp_dir, exist_ok=True)
+
+        temp_file = os.path.join(
+            tmp_dir,
+            f"{prefix}_{int(time.time() * 1000)}.wav",
+        )
+        sf.write(temp_file, recording, self.sample_rate)
+        return temp_file, duration_seconds
 
     def stop_recording(self, telemetry=None):
         """Stops the recording and saves to a temporary WAV file."""
@@ -67,22 +103,14 @@ class AudioRecorder:
             
         print("⏹️ Recording stopped.")
 
-        if not self.audio_data:
+        with self.audio_lock:
+            has_audio = bool(self.audio_data)
+
+        if not has_audio:
             print("⚠️ No audio data captured.")
             return None
 
-        # Concatenate all recorded blocks
-        recording = np.concatenate(self.audio_data, axis=0)
-
-        # Ensure the .tmp directory exists
-        tmp_dir = os.path.join(os.getcwd(), ".tmp")
-        os.makedirs(tmp_dir, exist_ok=True)
-        
-        # Save to a temporary WAV file
-        temp_file = os.path.join(tmp_dir, f"recording_{int(time.time())}.wav")
-        
-        # Save array to WAV
-        sf.write(temp_file, recording, self.sample_rate)
+        temp_file, _ = self.write_snapshot_file(prefix="recording")
         if telemetry:
             telemetry.mark(
                 "temp_file_write_complete",

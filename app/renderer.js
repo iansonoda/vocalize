@@ -4,6 +4,10 @@ const emptyState = document.getElementById("empty-state");
 const collapseBtn = document.getElementById("collapseBtn");
 const appContainer = document.getElementById("mainWindow");
 const quitBtn = document.getElementById("quitBtn");
+const livePreviewPanel = document.getElementById("live-preview");
+const livePreviewText = document.getElementById("live-preview-text");
+const livePreviewStatus = document.getElementById("live-preview-status");
+let activePreviewSessionId = null;
 
 collapseBtn.addEventListener("click", () => {
   appContainer.classList.toggle("collapsed");
@@ -23,10 +27,52 @@ function formatTime(date) {
   return hours + ":" + minutes + " " + ampm;
 }
 
+function showLivePreview(sessionId, text, statusLabel) {
+  activePreviewSessionId = sessionId || activePreviewSessionId;
+  livePreviewPanel.classList.remove("hidden");
+  livePreviewText.textContent = text || "Listening for speech...";
+  livePreviewStatus.textContent = statusLabel;
+}
+
+function clearLivePreview(sessionId = null) {
+  if (sessionId && activePreviewSessionId && sessionId !== activePreviewSessionId) {
+    return;
+  }
+
+  activePreviewSessionId = null;
+  livePreviewPanel.classList.add("hidden");
+  livePreviewText.textContent = "";
+  livePreviewStatus.textContent = "Idle";
+}
+
+ipcRenderer.on("recording-status", (event, isRecording) => {
+  if (isRecording) {
+    showLivePreview(activePreviewSessionId, "Listening for speech...", "Listening");
+  }
+});
+
+ipcRenderer.on("transcript-event", (event, payload) => {
+  if (payload.event === "partial") {
+    showLivePreview(payload.session_id, payload.text, "Partial");
+  } else if (payload.event === "final") {
+    showLivePreview(payload.session_id, payload.text, "Finalizing");
+  } else if (payload.event === "error") {
+    showLivePreview(
+      payload.session_id,
+      payload.message || "Something went wrong while transcribing.",
+      "Issue",
+    );
+  } else if (payload.event === "session-complete") {
+    clearLivePreview(payload.session_id);
+  }
+});
+
 ipcRenderer.on("new-transcription", (event, data) => {
   if (emptyState) {
     emptyState.style.display = "none";
   }
+
+  clearLivePreview(data.session_id);
 
   const item = document.createElement("div");
   item.className =

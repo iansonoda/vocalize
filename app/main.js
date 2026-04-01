@@ -79,9 +79,18 @@ function finalizeElectronSession(sessionId) {
   }
 
   const recordStartMs = state.events.record_start;
+  const firstPartialMs = state.events.electron_first_partial_received;
   const finalReceiptMs = state.events.electron_final_received;
   const statsReceiptMs = state.events.electron_stats_received;
   const metrics = {};
+
+  if (
+    typeof recordStartMs === "number" &&
+    typeof firstPartialMs === "number" &&
+    firstPartialMs >= recordStartMs
+  ) {
+    metrics.first_partial_ui_ms = firstPartialMs - recordStartMs;
+  }
 
   if (
     typeof recordStartMs === "number" &&
@@ -156,6 +165,31 @@ function handlePythonLine(line) {
     const timingEvent = parseJsonLine(line, 7);
     if (timingEvent) {
       rememberPythonTiming(timingEvent);
+    }
+  } else if (line.startsWith("TRANSCRIPT_EVENT:")) {
+    const payload = parseJsonLine(line, 17);
+    if (!payload) {
+      return;
+    }
+
+    const sessionState = payload.session_id
+      ? timingStateBySession.get(payload.session_id)
+      : null;
+    const alreadySawFirstPartial =
+      sessionState && sessionState.events.electron_first_partial_received;
+
+    if (payload.event === "partial" && !alreadySawFirstPartial) {
+      recordElectronTiming("electron_first_partial_received", {
+        session_id: payload.session_id,
+        partial_index: payload.partial_index,
+      });
+    }
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("transcript-event", payload);
+    }
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      overlayWindow.webContents.send("transcript-event", payload);
     }
   } else if (line.startsWith("FINAL:")) {
     const payload = parseJsonLine(line, 6);

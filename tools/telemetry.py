@@ -66,6 +66,7 @@ class SessionTelemetry:
         unix_seconds = time.time()
         metrics = {
             "recording_duration_ms": self._duration_ms("record_start", "record_stop"),
+            "first_partial_latency_ms": self._duration_ms("record_start", "first_partial_emitted"),
             "temp_file_write_ms": self._duration_ms("record_stop", "temp_file_write_complete"),
             "audio_capture_to_transcript_ms": self._duration_ms("record_stop", "transcription_request_end"),
             "transcription_roundtrip_ms": self._duration_ms("transcription_request_start", "transcription_request_end"),

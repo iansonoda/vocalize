@@ -4,6 +4,7 @@ from tools.cleaner import clean_text
 from tools.paster import paste_text
 from tools.db import save_transcription, get_stats
 from tools.telemetry import SessionTelemetry
+from tools.streaming_transcriber import StreamingTranscriptionSession
 import time
 import os
 
@@ -31,6 +32,7 @@ class AppController:
         self.settings = {"mode": "plain", "tone": "natural"}
         self.recording_start_time = 0
         self.current_session = None
+        self.streaming_session = None
         print(f"👂 Listening for {TOGGLE_KEY} press...")
 
     def update_settings(self, settings_json):
@@ -55,10 +57,19 @@ class AppController:
                 print("\n--- 🟢 Recording Started ---", flush=True)
                 self.recording_start_time = time.time()
                 self.recorder.start_recording()
+                self.streaming_session = StreamingTranscriptionSession(
+                    recorder=self.recorder,
+                    session_id=self.current_session.session_id,
+                    emit_event=self.emit_transcript_event,
+                    telemetry=self.current_session,
+                )
+                self.streaming_session.start()
             else:
                 # Stop recording
                 print("\n--- 🔴 Recording Stopped ---", flush=True)
                 duration = time.time() - self.recording_start_time
+                if self.streaming_session:
+                    self.streaming_session.stop()
                 if self.current_session:
                     self.current_session.mark(
                         "record_stop",
@@ -70,9 +81,21 @@ class AppController:
                     # Pass the audio to the transcription and then paste it
                     self.process_audio(audio_file, duration, session=self.current_session)
                 elif self.current_session:
+                    self.emit_transcript_event(
+                        "error",
+                        session_id=self.current_session.session_id,
+                        phase="recording",
+                        message="No audio file was created for this session.",
+                    )
+                    self.emit_transcript_event(
+                        "session-complete",
+                        session_id=self.current_session.session_id,
+                        outcome="no_audio_file",
+                    )
                     self.current_session.mark("session_aborted", reason="no_audio_file")
                     self.current_session.emit_summary(outcome="no_audio_file")
                     self.current_session = None
+                    self.streaming_session = None
 
     def on_release(self, key):
         # Stop listener if Escape is pressed (optional safety hatch)
@@ -83,11 +106,20 @@ class AppController:
     def process_audio(self, audio_file, duration, session=None):
         """Transcribe, clean, output the result, and log to DB."""
         telemetry = session or SessionTelemetry()
+        streaming_stats = (
+            self.streaming_session.get_stats() if self.streaming_session else {}
+        )
         print("STATUS: loading", flush=True)
 
         try:
             raw_text = transcribe_audio(audio_file, telemetry=telemetry)
             if raw_text:
+                self.emit_transcript_event(
+                    "final",
+                    session_id=telemetry.session_id,
+                    text=raw_text,
+                    phase="final_batch",
+                )
                 # Clean text via AI formatting layer
                 mode = self.settings.get("mode", "plain")
                 tone = self.settings.get("tone", "natural")
@@ -130,18 +162,53 @@ class AppController:
                     insertion_success=paste_success,
                     raw_chars=len(raw_text),
                     formatted_chars=len(formatted_text),
+                    partial_count=streaming_stats.get("partial_count", 0),
+                    partial_error_count=streaming_stats.get("partial_error_count", 0),
+                )
+                self.emit_transcript_event(
+                    "session-complete",
+                    session_id=telemetry.session_id,
+                    outcome="success",
+                    partial_count=streaming_stats.get("partial_count", 0),
                 )
             else:
+                self.emit_transcript_event(
+                    "error",
+                    session_id=telemetry.session_id,
+                    phase="final_batch",
+                    message="Final transcription did not return text.",
+                )
                 telemetry.mark("session_aborted", reason="empty_transcription")
-                telemetry.emit_summary(outcome="empty_transcription")
+                telemetry.emit_summary(
+                    outcome="empty_transcription",
+                    partial_count=streaming_stats.get("partial_count", 0),
+                    partial_error_count=streaming_stats.get("partial_error_count", 0),
+                )
+                self.emit_transcript_event(
+                    "session-complete",
+                    session_id=telemetry.session_id,
+                    outcome="empty_transcription",
+                    partial_count=streaming_stats.get("partial_count", 0),
+                )
         finally:
             self.current_session = None
+            if self.streaming_session:
+                self.streaming_session.join(timeout=0.1)
+            self.streaming_session = None
 
             # Optional: delete temporary audio file after processing to save disk space
             try:
                 os.remove(audio_file)
             except Exception:
                 pass
+
+    def emit_transcript_event(self, event_type, session_id, **data):
+        payload = {
+            "event": event_type,
+            "session_id": session_id,
+            **data,
+        }
+        print(f"TRANSCRIPT_EVENT:{json.dumps(payload)}", flush=True)
 
     def emit_stats(self, session_id=None):
         """Fetch stats from DB and print for Electron."""
