@@ -6,6 +6,7 @@ import os
 import time
 import sys
 import threading
+from tools.output import emit_stdout, emit_stderr
 
 class AudioRecorder:
     def __init__(self, sample_rate=44100, channels=1):
@@ -19,7 +20,7 @@ class AudioRecorder:
     def _audio_callback(self, indata, frames, time, status):
         """This is called (from a separate thread) for each audio block."""
         if status:
-            print(status, file=sys.stderr)
+            emit_stderr(str(status))
         with self.audio_lock:
             self.audio_data.append(indata.copy())
         
@@ -42,8 +43,8 @@ class AudioRecorder:
         else:
             bands = [volume_norm] * num_bands
             
-        print(f"BANDS:{json.dumps(bands)}", flush=True)
-        print(f"VOL:{min(1.0, volume_norm)}", flush=True)
+        emit_stdout(f"BANDS:{json.dumps(bands)}")
+        emit_stdout(f"VOL:{min(1.0, volume_norm)}")
 
     def start_recording(self):
         """Starts the audio recording."""
@@ -56,7 +57,7 @@ class AudioRecorder:
             callback=self._audio_callback
         )
         self.stream.start()
-        print("🎙️ Recording started...")
+        emit_stdout("🎙️ Recording started...")
 
     def get_audio_snapshot(self):
         with self.audio_lock:
@@ -101,13 +102,13 @@ class AudioRecorder:
             self.stream.close()
             self.stream = None
             
-        print("⏹️ Recording stopped.")
+        emit_stdout("⏹️ Recording stopped.")
 
         with self.audio_lock:
             has_audio = bool(self.audio_data)
 
         if not has_audio:
-            print("⚠️ No audio data captured.")
+            emit_stdout("⚠️ No audio data captured.")
             return None
 
         temp_file, _ = self.write_snapshot_file(prefix="recording")
@@ -117,7 +118,7 @@ class AudioRecorder:
                 audio_file=os.path.basename(temp_file),
                 audio_size_bytes=os.path.getsize(temp_file),
             )
-        print(f"💾 Saved recording to {temp_file}")
+        emit_stdout(f"💾 Saved recording to {temp_file}")
         
         return temp_file
 

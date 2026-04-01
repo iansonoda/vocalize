@@ -53,4 +53,12 @@
   .table-text {
     @apply text-[#333] text-sm leading-relaxed;
   }
+
+  .mode-chip {
+    @apply rounded-full border border-[#eadfce] bg-white px-4 py-2 text-[12px] font-semibold text-stone-600 shadow-[0_6px_16px_rgba(120,53,15,0.04)] transition-all duration-200 hover:border-[#fdba74] hover:text-[#9a3412];
+  }
+
+  .mode-chip-active {
+    @apply border-[#fb923c] bg-[#fff7ed] text-[#9a3412] shadow-[0_10px_24px_rgba(249,115,22,0.16)];
+  }
 }

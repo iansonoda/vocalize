@@ -131,6 +131,82 @@ function parseJsonLine(line, prefixLength) {
   }
 }
 
+function extractStructuredPayload(text) {
+  const trimmed = text.trimStart();
+  if (!trimmed) {
+    return null;
+  }
+
+  const opening = trimmed[0];
+  const closing = opening === "{" ? "}" : opening === "[" ? "]" : null;
+  if (!closing) {
+    return null;
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escaping = false;
+
+  for (let index = 0; index < trimmed.length; index += 1) {
+    const char = trimmed[index];
+
+    if (inString) {
+      if (escaping) {
+        escaping = false;
+      } else if (char === "\\") {
+        escaping = true;
+      } else if (char === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === "\"") {
+      inString = true;
+      continue;
+    }
+
+    if (char === opening) {
+      depth += 1;
+      continue;
+    }
+
+    if (char === closing) {
+      depth -= 1;
+      if (depth === 0) {
+        return {
+          jsonText: trimmed.slice(0, index + 1),
+          remainder: trimmed.slice(index + 1).trim(),
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+function parseStructuredPayload(line, prefixLength) {
+  const rawPayload = line.substring(prefixLength);
+  const extracted = extractStructuredPayload(rawPayload);
+
+  if (!extracted) {
+    return {
+      payload: parseJsonLine(line, prefixLength),
+      remainder: "",
+    };
+  }
+
+  try {
+    return {
+      payload: JSON.parse(extracted.jsonText),
+      remainder: extracted.remainder,
+    };
+  } catch (error) {
+    console.error("Failed to recover JSON line:", line, error);
+    return { payload: null, remainder: extracted.remainder };
+  }
+}
+
 function handlePythonLine(line) {
   if (!line) {
     return;
@@ -152,9 +228,12 @@ function handlePythonLine(line) {
       overlayWindow.webContents.send("status", "loading");
     }
   } else if (line.startsWith("BANDS:")) {
-    const bandsData = parseJsonLine(line, 6);
+    const { payload: bandsData, remainder } = parseStructuredPayload(line, 6);
     if (bandsData && overlayWindow && !overlayWindow.isDestroyed()) {
       overlayWindow.webContents.send("bands", bandsData);
+    }
+    if (remainder) {
+      handlePythonLine(remainder);
     }
   } else if (line.startsWith("VOL:")) {
     const vol = parseFloat(line.split(":")[1]);
@@ -162,12 +241,15 @@ function handlePythonLine(line) {
       mainWindow.webContents.send("volume", vol);
     }
   } else if (line.startsWith("TIMING:")) {
-    const timingEvent = parseJsonLine(line, 7);
+    const { payload: timingEvent, remainder } = parseStructuredPayload(line, 7);
     if (timingEvent) {
       rememberPythonTiming(timingEvent);
     }
+    if (remainder) {
+      handlePythonLine(remainder);
+    }
   } else if (line.startsWith("TRANSCRIPT_EVENT:")) {
-    const payload = parseJsonLine(line, 17);
+    const { payload, remainder } = parseStructuredPayload(line, 17);
     if (!payload) {
       return;
     }
@@ -191,8 +273,11 @@ function handlePythonLine(line) {
     if (overlayWindow && !overlayWindow.isDestroyed()) {
       overlayWindow.webContents.send("transcript-event", payload);
     }
+    if (remainder) {
+      handlePythonLine(remainder);
+    }
   } else if (line.startsWith("FINAL:")) {
-    const payload = parseJsonLine(line, 6);
+    const { payload, remainder } = parseStructuredPayload(line, 6);
     if (!payload) {
       return;
     }
@@ -206,8 +291,11 @@ function handlePythonLine(line) {
       session_id: payload.session_id,
       formatted_chars: payload.formatted ? payload.formatted.length : 0,
     });
+    if (remainder) {
+      handlePythonLine(remainder);
+    }
   } else if (line.startsWith("STATS:")) {
-    const stats = parseJsonLine(line, 6);
+    const { payload: stats, remainder } = parseStructuredPayload(line, 6);
     if (!stats) {
       return;
     }
@@ -218,6 +306,9 @@ function handlePythonLine(line) {
       session_id: stats.session_id,
     });
     finalizeElectronSession(stats.session_id);
+    if (remainder) {
+      handlePythonLine(remainder);
+    }
   } else if (line.startsWith("DEBUG:")) {
     console.log("Python Debug:", line);
   }

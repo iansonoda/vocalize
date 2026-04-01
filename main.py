@@ -1,10 +1,11 @@
 from tools.recorder import AudioRecorder
 from tools.transcriber import transcribe_audio
-from tools.cleaner import clean_text
+from tools.cleaner import clean_text, normalize_mode
 from tools.paster import paste_text
 from tools.db import save_transcription, get_stats
 from tools.telemetry import SessionTelemetry
 from tools.streaming_transcriber import StreamingTranscriptionSession
+from tools.output import emit_stdout
 import time
 import os
 
@@ -24,7 +25,7 @@ def hide_dock_icon():
             # This hides the dock icon for the Python process
             AppKit.NSApplication.sharedApplication().setActivationPolicy_(2)
         except Exception as e:
-            print(f"DEBUG: Could not hide dock icon: {e}", flush=True)
+            emit_stdout(f"DEBUG: Could not hide dock icon: {e}")
 
 class AppController:
     def __init__(self):
@@ -33,28 +34,31 @@ class AppController:
         self.recording_start_time = 0
         self.current_session = None
         self.streaming_session = None
-        print(f"👂 Listening for {TOGGLE_KEY} press...")
+        emit_stdout(f"👂 Listening for {TOGGLE_KEY} press...")
 
     def update_settings(self, settings_json):
         try:
             new_settings = json.loads(settings_json)
+            if "mode" in new_settings:
+                new_settings["mode"] = normalize_mode(new_settings["mode"])
             self.settings.update(new_settings)
-            print(f"DEBUG: Updated settings to {self.settings}", flush=True)
+            emit_stdout(f"DEBUG: Updated settings to {self.settings}")
         except Exception as e:
-            print(f"DEBUG: Failed to parse settings: {e}", flush=True)
+            emit_stdout(f"DEBUG: Failed to parse settings: {e}")
 
     def on_press(self, key):
         if key == TOGGLE_KEY:
             if not self.recorder.is_recording:
                 # Start recording
                 self.current_session = SessionTelemetry()
+                selected_mode = normalize_mode(self.settings.get("mode", "plain"))
                 self.current_session.mark(
                     "record_start",
-                    mode=self.settings.get("mode", "plain"),
+                    mode=selected_mode,
                     tone=self.settings.get("tone", "natural"),
                     trigger_key=str(TOGGLE_KEY),
                 )
-                print("\n--- 🟢 Recording Started ---", flush=True)
+                emit_stdout("\n--- 🟢 Recording Started ---")
                 self.recording_start_time = time.time()
                 self.recorder.start_recording()
                 self.streaming_session = StreamingTranscriptionSession(
@@ -66,7 +70,7 @@ class AppController:
                 self.streaming_session.start()
             else:
                 # Stop recording
-                print("\n--- 🔴 Recording Stopped ---", flush=True)
+                emit_stdout("\n--- 🔴 Recording Stopped ---")
                 duration = time.time() - self.recording_start_time
                 if self.streaming_session:
                     self.streaming_session.stop()
@@ -109,7 +113,7 @@ class AppController:
         streaming_stats = (
             self.streaming_session.get_stats() if self.streaming_session else {}
         )
-        print("STATUS: loading", flush=True)
+        emit_stdout("STATUS: loading")
 
         try:
             raw_text = transcribe_audio(audio_file, telemetry=telemetry)
@@ -121,16 +125,31 @@ class AppController:
                     phase="final_batch",
                 )
                 # Clean text via AI formatting layer
-                mode = self.settings.get("mode", "plain")
+                mode = normalize_mode(self.settings.get("mode", "plain"))
                 tone = self.settings.get("tone", "natural")
                 
                 # Combine tone into cleaner logic if needed, or just pass it
-                formatted_text = clean_text(raw_text, mode=mode, tone=tone, telemetry=telemetry)
+                cleanup_result = clean_text(
+                    raw_text,
+                    mode=mode,
+                    tone=tone,
+                    telemetry=telemetry,
+                    return_metadata=True,
+                )
+                formatted_text = cleanup_result["text"]
+                cleanup_status = cleanup_result["status"]
+                cleanup_source = cleanup_result["output_source"]
+                cleanup_fallback_reason = cleanup_result["fallback_reason"]
+                resolved_mode = cleanup_result["resolved_mode"]
                 
                 # Fallback if cleaner failed or returned empty
                 if not formatted_text:
                     telemetry.mark("cleanup_fallback", reason="empty_cleaned_text")
                     formatted_text = raw_text
+                    cleanup_status = "fallback_to_raw"
+                    cleanup_source = "raw_fallback"
+                    cleanup_fallback_reason = "empty_cleaned_text"
+                    resolved_mode = mode
 
                 # Paste into active window
                 paste_success = paste_text(formatted_text + " ", telemetry=telemetry)
@@ -139,18 +158,21 @@ class AppController:
                 payload = json.dumps({
                     "raw": raw_text,
                     "formatted": formatted_text,
-                    "mode": mode,
+                    "mode": resolved_mode,
                     "duration": duration,
                     "session_id": telemetry.session_id,
+                    "cleanup_status": cleanup_status,
+                    "cleanup_source": cleanup_source,
+                    "cleanup_fallback_reason": cleanup_fallback_reason,
                 })
-                print(f"FINAL:{payload}", flush=True)
+                emit_stdout(f"FINAL:{payload}")
                 telemetry.mark("final_event_emitted", event_name="FINAL")
                 
                 # Save the record in the database
                 save_transcription(
                     raw_text,
                     formatted_text,
-                    mode=mode,
+                    mode=resolved_mode,
                     duration=duration,
                     telemetry=telemetry,
                 )
@@ -208,14 +230,14 @@ class AppController:
             "session_id": session_id,
             **data,
         }
-        print(f"TRANSCRIPT_EVENT:{json.dumps(payload)}", flush=True)
+        emit_stdout(f"TRANSCRIPT_EVENT:{json.dumps(payload)}")
 
     def emit_stats(self, session_id=None):
         """Fetch stats from DB and print for Electron."""
         stats = get_stats()
         if session_id:
             stats["session_id"] = session_id
-        print(f"STATS:{json.dumps(stats)}", flush=True)
+        emit_stdout(f"STATS:{json.dumps(stats)}")
 
     def run(self):
         # We need to re-import keyboard specifically inside run scope or at module level properly

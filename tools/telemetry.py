@@ -4,6 +4,7 @@ import threading
 import time
 import uuid
 from datetime import datetime, timezone
+from tools.output import emit_stdout
 
 
 _FILE_LOCK = threading.Lock()
@@ -49,7 +50,7 @@ class SessionTelemetry:
             self._events[event] = perf_ns
 
         append_jsonl(self.log_path, payload)
-        print(f"TIMING:{json.dumps(payload, sort_keys=True)}", flush=True)
+        emit_stdout(f"TIMING:{json.dumps(payload, sort_keys=True)}")
         return payload
 
     def _duration_ms(self, start_event, end_event):
@@ -90,5 +91,5 @@ class SessionTelemetry:
         }
 
         append_jsonl(self.log_path, payload)
-        print(f"BENCHMARK:{json.dumps(payload, sort_keys=True)}", flush=True)
+        emit_stdout(f"BENCHMARK:{json.dumps(payload, sort_keys=True)}")
         return payload

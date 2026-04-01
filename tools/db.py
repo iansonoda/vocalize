@@ -1,6 +1,7 @@
 import os
 import psycopg2
 from dotenv import load_dotenv
+from tools.output import emit_stdout
 
 load_dotenv()
 
@@ -38,12 +39,12 @@ def save_transcription(raw_text, formatted_text, mode="plain", duration=0, telem
         conn.close()
         if telemetry:
             telemetry.mark("database_save_end", status="success", word_count=word_count)
-        print("💽 Saved run to database log.")
+        emit_stdout("💽 Saved run to database log.")
         
     except Exception as e:
         if telemetry:
             telemetry.mark("database_save_end", status="exception", error=str(e))
-        print(f"❌ Failed to save to database: {e}")
+        emit_stdout(f"❌ Failed to save to database: {e}")
 
 def get_stats():
     """
@@ -113,7 +114,7 @@ def get_stats():
             "wpm": avg_wpm
         }
     except Exception as e:
-        print(f"❌ Failed to fetch stats: {e}")
+        emit_stdout(f"❌ Failed to fetch stats: {e}")
         return {"streak": 0, "total_words": 0, "wpm": 0}
 
 if __name__ == "__main__":

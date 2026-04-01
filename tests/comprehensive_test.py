@@ -43,7 +43,20 @@ def run_cleaner_stress_tests():
         {
             "name": "Technical/Coding dictation",
             "input": "define a function named calculate underscore total with parameters a and b colon return a plus b",
-            "expected_contain": ["def", "calculate_total", "(a, b):", "return a + b"]
+            "expected_contain": ["def", "calculate_total", "(a, b):", "return a + b"],
+            "mode": "code",
+        },
+        {
+            "name": "Notes mode meeting capture",
+            "input": "first review milestone three next line second tighten the cleaner next line third test notes mode",
+            "expected_contain": ["review milestone", "tighten the cleaner", "test notes mode"],
+            "mode": "notes",
+        },
+        {
+            "name": "Email mode follow-up",
+            "input": "hi Sarah comma thanks for the update period I will send the revised draft tomorrow period best comma Ian",
+            "expected_contain": ["Hi Sarah,", "revised draft tomorrow", "Best,", "Ian"],
+            "mode": "email",
         }
     ]
 
@@ -51,7 +64,7 @@ def run_cleaner_stress_tests():
         print(f"Running: {case['name']}")
         print(f"Input: {case['input']}")
         start = time.time()
-        result = clean_text(case['input'])
+        result = clean_text(case['input'], mode=case.get("mode", "plain"))
         duration = time.time() - start
         print(f"Output ({duration:.2f}s):\n{result}")
         print("-" * 40)

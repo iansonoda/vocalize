@@ -1,6 +1,7 @@
 import os
 import requests
 from dotenv import load_dotenv
+from tools.output import emit_stdout
 
 load_dotenv()
 
@@ -25,7 +26,7 @@ def transcribe_audio(
     request_metadata = request_metadata or {}
 
     if not os.path.exists(file_path):
-        print(f"❌ Error: Audio file not found at {file_path}")
+        emit_stdout(f"❌ Error: Audio file not found at {file_path}")
         if telemetry:
             telemetry.mark(
                 f"{event_prefix}_end",
@@ -35,7 +36,7 @@ def transcribe_audio(
             )
         return None
 
-    print(f"⬆️ Uploading {file_path} to Whisper API...")
+    emit_stdout(f"⬆️ Uploading {file_path} to Whisper API...")
     
     try:
         with open(file_path, "rb") as f:
@@ -65,7 +66,7 @@ def transcribe_audio(
                     request_kind=request_kind,
                     **request_metadata,
                 )
-            print(f"✅ Transcription complete: '{text}'")
+            emit_stdout(f"✅ Transcription complete: '{text}'")
             return text
         elif response.status_code == 503:
             if telemetry:
@@ -76,7 +77,7 @@ def transcribe_audio(
                     request_kind=request_kind,
                     **request_metadata,
                 )
-            print("⏳ Model is loading. Please try again in a few seconds.")
+            emit_stdout("⏳ Model is loading. Please try again in a few seconds.")
             return None
         else:
             if telemetry:
@@ -87,7 +88,7 @@ def transcribe_audio(
                     request_kind=request_kind,
                     **request_metadata,
                 )
-            print(f"❌ API Error ({response.status_code}): {response.text}")
+            emit_stdout(f"❌ API Error ({response.status_code}): {response.text}")
             return None
 
     except Exception as e:
@@ -99,7 +100,7 @@ def transcribe_audio(
                 request_kind=request_kind,
                 **request_metadata,
             )
-        print(f"❌ Failed to transcribe: {e}")
+        emit_stdout(f"❌ Failed to transcribe: {e}")
         return None
 
 if __name__ == "__main__":
